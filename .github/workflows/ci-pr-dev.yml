@@ -1,0 +1,105 @@
+name: CI - Pull Request to Dev
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+jobs:
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Lint backend
+        working-directory: ./backend
+        run: |
+          npm install
+          npx eslint .
+
+      - name: Lint frontend
+        working-directory: ./frontend
+        run: |
+          npm install
+          npm run lint
+
+  audit:
+    name: NPM Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Audit backend
+        working-directory: ./backend
+        run: |
+          npm install
+          npm audit --audit-level=high
+
+      - name: Audit frontend
+        working-directory: ./frontend
+        run: |
+          npm install
+          npm audit --audit-level=high
+
+  security:
+    name: Snyk Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Snyk backend
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+        working-directory: ./backend
+
+      - name: Snyk frontend
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+        working-directory: ./frontend
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Test backend
+        working-directory: ./backend
+        run: |
+          npm install
+          npm test
+
+      - name: Test frontend
+        working-directory: ./frontend
+        run: |
+          npm install
+          npm test -- --watchAll=false --passWithNoTests
+
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [lint, audit, security, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t backend-test ./backend
+
+      - name: Build frontend image
+        run: docker build -t frontend-test ./frontend
